@@ -1,70 +1,80 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-One paragraph: the thing, and the idea behind it.
+*Write His Fate* is a typing-driven narrative game: the manuscript on screen
+is the story, and the player writes the knight's adventure into existence one
+correct keystroke at a time. Typing the next character of the shown sentence
+advances both the prose and a small canvas illustration of the knight's
+journey (Road, Bridge, a Forest/Cave fork, and one of three ending scenes);
+typing a wrong character damages the knight instead of erasing anything.
+There is no tutorial screen or instruction text anywhere in the game — the
+blinking caret in the manuscript and the immediate, visible response to every
+keystroke (the beat animates, the knight staggers) are meant to teach the
+whole interaction through play in the first few seconds.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+**1. The Forest/Cave fork.** After the bridge, the story splits: Forest is
+the longer, easier branch (longer sentences overall but individually gentler
+words), Cave is short and deliberately harder to type, ending with the
+dragon's contextual fire-death instead of the standard knight-damage death.
+Branching, the two paths' relative difficulty, and the three speed endings
+(fast → young princess, medium → elderly princess, slow → a skeleton at the
+window, from `classifySpeed`'s WPM thresholds in
+[`09a1acd`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-u7488099/commit/09a1acd)'s
+`config.ts`) were kept completely intact through the whole correction pass
+below — the brief for this pass was explicitly to fix the failure system,
+not touch the story built on the starter in
+[`aee6e7e`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-u7488099/commit/aee6e7e).
 
-1. **what happened** --- the problem, or the thing that went wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
+**2. Playtesting exposed a cascade-death bug, not a taste problem.** I
+manually played the build repeatedly after the first working version was
+done. The failure system re-checked a cooldown *inside* the damage handler
+only, so a burst of wrong keystrokes typed faster than a person could
+consciously stop (autorepeat, or just fast fumbling) could register several
+damage stages from what was really one mistake — the knight could die from a
+single typo's aftershock before the player even saw the first hit land. I
+corrected this by moving the guard to the top of the reducer: every input
+action now carries a timestamp, and any action arriving before
+`state.inputLockedUntil` (one second past the last mistake) is dropped
+entirely — no advance, no damage, no branch selection — rather than papering
+over it with a smaller cooldown inside one handler. That's a harness-level
+fix (a rule the reducer enforces for every action type) rather than a retry,
+and it's covered by a dedicated test in
+[`09a1acd`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-u7488099/commit/09a1acd)
+(`spec/crit-5.test.ts`, "one mistake locks out input for exactly
+INPUT_LOCKOUT_MS") asserting the exact 0/100/900/1100 ms sequence from the
+brief.
 
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** --- the standards and checks your work has to satisfy
---- rather than in a retry: a rule added to `CLAUDE.md`, a check wired up, an
-attempt thrown away. Retrying until it passes is the routine case, and changing
-what the work runs against is the skilled one.
+**3. Five failure stages replace the original three, with no numbers on
+screen.** The old build had three damage steps and reused a single crack
+overlay for all of them, which read as "something broke" rather than telling
+the player what. The corrected system is: helmet cracks → helmet breaks off
+→ shield cracks → shield breaks → the knight dies, driven by one
+`knightDamage: 0–5` counter and two pure stage-lookup functions in
+`render.ts`. There's still no lives counter or heart icons — the only
+"health bar" is the knight's own sprite losing pieces of armor, and that
+state persists all the way into the ending screen (arriving without a
+helmet if the player took two hits, for example).
 
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
+**4. I found and judged a visual-clarity bug myself; Claude verified the
+mechanics.** Claude Code could confirm the *logic* was correct (tests
+passing, the reducer producing the right damage count at the right time),
+but it took me actually looking at the rendered frames to catch that the
+helmet's "cracked" stage was invisible — a white crack line against the
+helmet's own light grey fill blended into an existing highlight streak, so
+stage 1 looked identical to stage 0. No test would have caught that; it's a
+contrast/legibility judgement a person has to make by eye. Once flagged, the fix (switching that stroke to a dark ink colour, part of
+[`09a1acd`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-u7488099/commit/09a1acd)'s
+`drawHelmet`) was small and mechanical, but deciding it needed fixing — and
+deciding, separately, that a very minor debris-fragment legibility nuance in
+the shield-broken stage was *not* worth chasing further — was mine to make,
+not something the agent could verify on its own.
 
 ## Before you ship
 
-`pnpm check:evidence` verifies your citations resolve to real commits, that a
-reflection entry the marker reads is in `reflections/`, and that your
-`CLAUDE.md` is there --- before a marker ever opens the file. It checks that
-your map is traceable, not that it is good: the marker judges whether your
-small, deliberately chosen set of moments shows real judgement and reflection. A
-green check is not a substitute for that curation.
-
-Images aren't checked: unlike a citation whose SHA doesn't resolve, a broken
-image is visible the moment this file is rendered on GitHub.
+`pnpm check` runs typecheck, build, and the full test suite (21 tests across
+3 files, including the five-stage and input-lockout tests above).
+`pnpm check:evidence` confirms this file and the reflection resolve to real
+commits before a marker opens either.
